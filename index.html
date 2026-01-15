@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>One Piece Card Game</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <img src="assets/Logo_OP.png" alt="One Piece Card Game Logo" class="site-logo">
+
+    <div id="theme-toggle" class="theme-toggle">
+        <img src="assets/Rudder.png" alt="Mode" class="rudder">
+        <span id="theme-label">Pirates</span>
+    </div>
+  </header>
+
+  <!-- CONTROLS -->
+  <main class="content">
+    <div id="controls">
+      <img src="assets/Combos_Card_Title.png" alt="Titre" class="control-frame">
+      <div class="select-wrapper">
+        <label for="card">Choisir une extension ou un Starter Deck :</label>
+        <select id="card">
+          <option value="">-- Sélectionner --</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="counter">Aucune sélection.</div>
+    <div id="gallery"></div>
+    <button id="loadMore" disabled>Charger plus</button>
+  </main>
+
+  <!-- OVERLAY (zoom carte) -->
+  <div id="overlay"><img src="" alt="Carte zoomée"></div>
+
+  <!-- LOADER -->
+  <div id="loader"></div>
+
+<script>
+/* ====== Configuration & variables ====== */
+const gallery = document.getElementById("gallery");
+const loadMoreBtn = document.getElementById("loadMore");
+const counter = document.getElementById("counter");
+const overlay = document.getElementById("overlay");
+const overlayImg = overlay.querySelector("img");
+const cardSelect = document.getElementById("card");
+const loader = document.getElementById("loader");
+const searchInput = document.getElementById("search");
+
+const baseUrl = "https://en.onepiece-cardgame.com/images/cardlist/card/";
+const imagesPerPage = 20;
+const loaderImages = [
+  "assets/Card/Back_Card_Off.png",
+  "assets/Card/Back_Card_Green.png",
+  "assets/Card/Back_Card_Pink.png"
+];
+
+let currentcard = "";
+let currentIndex = 1;
+let displayedCount = 0;
+let searchQuery = "";
+
+/* ====== Génération dynamique des options (OP01..OP14 / EB01..EB04 / ST01..ST29 / P-01..P-92) ====== */
+for (let i = 1; i <= 20; i++) {
+  const code = `OP${String(i).padStart(2, "0")}`;
+  const opt = document.createElement("option");
+  opt.value = code;
+  opt.textContent = code;
+  cardSelect.appendChild(opt);
+}
+for (let i = 1; i <= 10; i++) {
+  const code = `EB${String(i).padStart(2, "0")}`;
+  const opt = document.createElement("option");
+  opt.value = code;
+  opt.textContent = code;
+  cardSelect.appendChild(opt);
+}
+for (let i = 1; i <= 50; i++) {
+  const code = `ST${String(i).padStart(2, "0")}`;
+  const opt = document.createElement("option");
+  opt.value = code;
+  opt.textContent = code;
+  cardSelect.appendChild(opt);
+}
+const code = `P`;
+const label = `Promotion Cards`
+const opt = document.createElement("option");
+opt.value = code;
+opt.textContent = label;
+cardSelect.appendChild(opt);
+
+/* ====== Utilitaires ====== */
+function randomInt(min, max) { return Math.floor(Math.random()*(max-min+1))+min; }
+function setLoading(on){
+  if(on){
+    document.body.classList.add("loading");
+    loader.classList.add("active");
+  } else {
+    document.body.classList.remove("loading");
+    loader.classList.remove("active");
+  }
+}
+function updateCounter(){ counter.textContent = `${displayedCount} cartes affichées (y compris variantes)`; }
+function resetGallery(){ gallery.innerHTML = ""; displayedCount = 0; currentIndex = 1; updateCounter(); }
+
+/* ====== Loader visuals (centered & shuffled cards) ====== */
+function showLoader(){
+  loader.innerHTML = "";
+  // center and create three shuffled cards with random animation parameters
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
+  loaderImages.forEach((src, i) => {
+    const el = document.createElement("img");
+    el.src = src;
+    el.className = "loader-card";
+    // position central (absolute will place them relative to viewport)
+    el.style.left = `${centerX - 40}px`;
+    el.style.top = `${centerY - 60}px`;
+    // randomize animation variables
+    for (let n=1; n<=4; n++){
+      el.style.setProperty(`--x${n}`, `${randomInt(-40,40)}px`);
+      el.style.setProperty(`--y${n}`, `${randomInt(-30,30)}px`);
+      el.style.setProperty(`--r${n}`, `${randomInt(-20,20)}deg`);
+    }
+    // also random z-index to simulate overlap
+    el.style.zIndex = String(3000 + i);
+    loader.appendChild(el);
+  });
+  // block interactions & scroll
+  document.body.style.overflow = "hidden";
+  document.body.classList.add("loading");
+  loader.classList.add("active");
+}
+
+function hideLoader(){
+  loader.classList.remove("active");
+  document.body.classList.remove("loading");
+  document.body.style.overflow = "";
+}
+
+/* ====== Afficher une image dans la galerie (après test) ====== */
+function tryLoadImage(url, altText) {
+  return new Promise(resolve => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "card-wrap";
+
+    const frame = document.createElement("div");
+    frame.className = "card-frame";
+    frame.style.backgroundImage = `url("assets/Frame_Black.png")`;
+
+    const img = document.createElement("img");
+    img.alt = altText;
+    img.className = "card";
+
+    img.onload = () => {
+      img.classList.add("loaded");
+      wrapper.appendChild(frame);
+      wrapper.appendChild(img);
+      gallery.appendChild(wrapper);
+
+      displayedCount++;
+      updateCounter();
+      resolve(true);
+    };
+
+    img.onerror = () => {
+      resolve(false);
+    };
+
+    img.addEventListener("click", () => {
+      overlayImg.src = url;
+      overlay.classList.add("active");
+      overlay.setAttribute("aria-hidden", "false");
+    });
+
+    img.src = url;
+  });
+}
+
+
+/* ====== Chargement des images ====== */
+async function loadImages(){
+  showLoader();
+  loadMoreBtn.disabled = true;
+
+  let loadedSomething = false;
+  const start = currentIndex;
+  const end = currentIndex + imagesPerPage - 1;
+
+  for (let i = start; i <= end; i++){
+    const num = String(i).padStart(3, "0");
+
+    const mainLoaded = await tryLoadImage(
+      `${baseUrl}${currentcard}-${num}.png`,
+      `Carte ${currentcard}-${num}`
+    );
+
+    if (mainLoaded) loadedSomething = true;
+
+    const variantPromises = [];
+    for (let p = 1; p <= end; p++){
+      variantPromises.push(
+        tryLoadImage(
+          `${baseUrl}${currentcard}-${num}_p${p}.png`,
+          `Carte ${currentcard}-${num} Variante ${p}`
+        )
+      );
+    }
+
+    const results = await Promise.all(variantPromises);
+    if (results.some(Boolean)) loadedSomething = true;
+  }
+
+  currentIndex += imagesPerPage;
+
+  if (!loadedSomething) {
+    loadMoreBtn.disabled = true;
+    loadMoreBtn.textContent = "Toutes les cartes sont affichées";
+  } else {
+    loadMoreBtn.disabled = false;
+    loadMoreBtn.textContent = "Charger plus";
+  }
+
+  hideLoader();
+}
+
+/* ====== Charger une carte ====== */
+async function loadcard(card){
+  currentcard = card;
+  resetGallery();
+  currentIndex = 1;
+  displayedCount = 0;
+
+  counter.textContent = "Chargement des cartes...";
+  loadMoreBtn.disabled = false;
+
+  await loadImages();
+}
+
+/* ====== Evenements UI ====== */
+cardSelect.addEventListener("change", e => {
+  const val = e.target.value;
+  if (val) loadcard(val);
+});
+loadMoreBtn.addEventListener("click", loadImages);
+overlay.addEventListener("click", () => { overlay.classList.remove("active"); overlay.setAttribute("aria-hidden","true"); });
+
+/* ====== Initial counter ====== */
+updateCounter();
+
+document.addEventListener("DOMContentLoaded", () => {
+  const toggle = document.getElementById("theme-toggle");
+  const label = document.getElementById("theme-label");
+  const rudder = document.querySelector(".rudder");
+  const logo = document.querySelector(".site-logo");
+
+  toggle.addEventListener("click", () => {
+    const body = document.body;
+    const current = body.getAttribute("data-theme");
+    const next = current === "pirate" ? "marine" : "pirate";
+
+    body.setAttribute("data-theme", next);
+
+    label.textContent = next === "pirate" ? "Pirates" : "Marines";
+
+    logo.src = next === "marine"
+      ? "assets/Logo_OP_White.png"
+      : "assets/Logo_OP.png";
+
+    rudder.src = next === "marine"
+      ? "assets/Rudder_White.png"
+      : "assets/Rudder.png";
+
+    rudder.classList.add("spin");
+    setTimeout(() => rudder.classList.remove("spin"), 600);
+  });
+});
+</script>
+</body>
+</html>
