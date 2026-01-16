@@ -197,11 +197,21 @@ img.card:hover {
 }
 #overlay.active { visibility: visible; opacity: 1; }
 #overlay img {
-  width: 90%;
-  max-width: 600px;
   border-radius: 15px;
   box-shadow: 0 0 30px var(--hover-glow);
   animation: zoomIn 0.3s ease;
+}
+@media (min-device-width: 700px ), (max-device-width: 699px) and (orientation: landscape){
+  #overlay img {
+    height: 90%;
+    max-height: 600px;
+  }
+}
+@media (max-device-width: 699px) and (orientation: portrait) {
+  #overlay img {
+    width: 90%;
+    max-width: 600px;
+  }
 }
 @keyframes zoomIn {
   from { transform: scale(0.9); opacity: 0; }
